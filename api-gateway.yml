@@ -4,26 +4,35 @@ server:
 spring:
   application:
     name: api-gateway
-  
+
   cloud:
     gateway:
       routes:
-        
+
+        # User Service
         - id: user-service
           uri: lb://USER-SERVICE
           predicates:
             - Path=/api/users/**
-        
+
+        # Course Service
         - id: course-service
           uri: lb://COURSE-SERVICE
           predicates:
             - Path=/api/courses/**,/api/categories/**,/api/sections/**,/api/lectures/**
-        
+
+        # Enrollment Service + Circuit Breaker
         - id: enrollment-service
           uri: lb://ENROLLMENT-SERVICE
           predicates:
             - Path=/api/enrollments/**,/api/progress/**
-        
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: enrollmentCircuitBreaker
+                fallbackUri: forward:/fallback/enrollment
+
+        # Payment Service
         - id: payment-service
           uri: lb://PAYMENT-SERVICE
           predicates:
@@ -32,5 +41,29 @@ spring:
 eureka:
   client:
     service-url:
-      defaultZone:
-        http://localhost:8761/eureka/
+      defaultZone: http://localhost:8761/eureka/
+
+  instance:
+    prefer-ip-address: true
+
+resilience4j:
+  circuitbreaker:
+    instances:
+
+      enrollmentCircuitBreaker:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 15s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
